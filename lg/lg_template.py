@@ -1,16 +1,4 @@
-# Copyright The Lightning AI team.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+
 """MNIST autoencoder example.
 
 To run: python autoencoder.py --trainer.max_epochs=50
@@ -118,8 +106,45 @@ class LitAutoEncoder(LightningModule):
     def __init__(self, hidden_dim: int = 64, learning_rate=10e-3):
         super().__init__()
         self.save_hyperparameters()
-        self.encoder = nn.Sequential(nn.Linear(28 * 28, hidden_dim), nn.ReLU(), nn.Linear(hidden_dim, 3))
-        self.decoder = nn.Sequential(nn.Linear(3, hidden_dim), nn.ReLU(), nn.Linear(hidden_dim, 28 * 28))
+        self.conv = nn.Sequential(
+            nn.Conv1d(1, 16, kernel_size=16, stride=2),
+            nn.ReLU(),
+            nn.MaxPool1d(2),
+            # nn.Dropout(0.5),
+            nn.Conv1d(16, 32, kernel_size=8, stride=2),
+            nn.ReLU(),
+            nn.MaxPool1d(2),
+            # nn.Dropout(0.5),
+            nn.Conv1d(32, 64, kernel_size=4, stride=2),
+            nn.ReLU(),
+            nn.MaxPool1d(2),
+            nn.Flatten(),
+        )
+        self.linear = nn.Sequential(
+            nn.Linear(2112, 1024),
+            nn.ReLU(),
+            # nn.Dropout(0.5),
+            nn.Linear(1024, 512),
+            nn.ReLU(),
+            # nn.Dropout(0.5),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, output_dim),
+        )
+        self.net = nn.Sequential(
+            nn.Conv1d(1, 8, kernel_size=16, stride=2),
+            nn.ReLU(),
+            nn.MaxPool1d(2),
+            nn.Flatten(),
+            nn.Dropout(0.5),
+            nn.Linear(4400, 1024),
+            nn.ReLU(),
+            nn.Linear(1024, 512),
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, output_dim),
+        )
 
     def forward(self, x):
         z = self.encoder(x)
