@@ -1,16 +1,3 @@
-# Copyright The Lightning AI team.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 """Here are 4 easy steps to use Fabric in your PyTorch code.
 
 1. Create the Lightning Fabric object at the beginning of your script.
@@ -41,32 +28,63 @@ from torch.optim.lr_scheduler import StepLR
 from torchmetrics.classification import Accuracy
 from torchvision.datasets import MNIST
 
-DATASETS_PATH = path.join(path.dirname(__file__), "..", "..", "..", "Datasets")
+
+class ECG_PPG_Dataset(Dataset):
+    def __init__(self, data_dir, transform=None):
+        self.data_dir = Path(data_dir)
+        self.transform = transform
+        self.sample_files = list(self.data_dir.glob("feats_*.npy"))
+        self.target_files = list(self.data_dir.glob("targets_*.npy"))
+
+        self.sample_maps = []
+        self.target_maps = []
+        self.sample_indices = []
+
+        for i, (sample_file, target_file) in enumerate(
+            zip(self.sample_files, self.target_files)
+        ):
+            sample_map = np.load(sample_file, mmap_mode="r")
+            target_map = np.load(target_file, mmap_mode="r")
+            logging.info(f"load {sample_file} and {target_file}")
+
+            self.sample_maps.append(sample_map)
+            self.target_maps.append(target_map)
+
+            for j in range(len(sample_map)):
+                self.sample_indices.append((i, j))
+
+    def __len__(self):
+        return len(self.sample_indices)
+
+    def __getitem__(self, idx):
+        file_index, sample_index = self.sample_indices[idx]
+        sample = self.sample_maps[file_index][sample_index].copy()
+        sample = sample.reshape(1, -1)
+        target = self.target_maps[file_index][sample_index].copy()
+
+        if self.transform:
+            sample = self.transform.augment(sample)
+
+        return torch.from_numpy(sample).float(), torch.from_numpy(target).long()
 
 
 class Net(nn.Module):
-    def __init__(self) -> None:
+    def __init__(self, input_size=2216, output_size=104) -> None:
         super().__init__()
-        self.conv1 = nn.Conv2d(1, 32, 3, 1)
-        self.conv2 = nn.Conv2d(32, 64, 3, 1)
-        self.dropout1 = nn.Dropout(0.25)
-        self.dropout2 = nn.Dropout(0.5)
-        self.fc1 = nn.Linear(9216, 128)
-        self.fc2 = nn.Linear(128, 10)
+        self.net = nn.Sequential(
+            nn.Conv1d(1, 16, 3, 1),
+            nn.ReLU(),
+            nn.MaxPool1d(2),
+            nn.Flatten(),
+            nn.LazyLinear(1024),
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, output_size),
+        )
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = F.relu(x)
-        x = self.conv2(x)
-        x = F.relu(x)
-        x = F.max_pool2d(x, 2)
-        x = self.dropout1(x)
-        x = torch.flatten(x, 1)
-        x = self.fc1(x)
-        x = F.relu(x)
-        x = self.dropout2(x)
-        x = self.fc2(x)
-        return F.log_softmax(x, dim=1)
+        return self.net(x)
 
 
 def run(hparams):
@@ -76,24 +94,26 @@ def run(hparams):
 
     seed_everything(hparams.seed)  # instead of torch.manual_seed(...)
 
-    transform = T.Compose([T.ToTensor(), T.Normalize((0.1307,), (0.3081,))])
-
-    # Let rank 0 download the data first, then everyone will load MNIST
-    with fabric.rank_zero_first(local=False):  # set `local=True` if your filesystem is not shared between machines
-        train_dataset = MNIST(DATASETS_PATH, download=fabric.is_global_zero, train=True, transform=transform)
-        test_dataset = MNIST(DATASETS_PATH, download=fabric.is_global_zero, train=False, transform=transform)
+    # Let rank 0 download the data first
+    with fabric.rank_zero_first(
+        local=False
+    ):  # set `local=True` if your filesystem is not shared between machines
+        dataset = ECG_PPG_Dataset(
+            data_dir="/work/app/wanghongyang/dataset/ecg_ppg_feat_map", transform=None
+        )
+        train_set, val_set = torch.utils.data.random_split(dataset, [0.8, 0.2])
 
     train_loader = torch.utils.data.DataLoader(
-        train_dataset,
+        train_set,
         batch_size=hparams.batch_size,
     )
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=hparams.batch_size)
+    val_loader = torch.utils.data.DataLoader(val_set, batch_size=hparams.batch_size)
 
     # don't forget to call `setup_dataloaders` to prepare for dataloaders for distributed training.
-    train_loader, test_loader = fabric.setup_dataloaders(train_loader, test_loader)
+    train_loader, val_loader = fabric.setup_dataloaders(train_loader, val_loader)
 
     model = Net()  # remove call to .to(device)
-    optimizer = optim.Adadelta(model.parameters(), lr=hparams.lr)
+    optimizer = optim.AdamW(model.parameters(), lr=hparams.lr)
 
     # don't forget to call `setup` to prepare for model / optimizer for distributed training.
     # the model is moved automatically to the right device.
@@ -130,7 +150,7 @@ def run(hparams):
         model.eval()
         test_loss = 0
         with torch.no_grad():
-            for data, target in test_loader:
+            for data, target in val_loader:
                 # NOTE: no need to call `.to(device)` on the data, target
                 output = model(data)
                 test_loss += F.nll_loss(output, target, reduction="sum").item()
@@ -146,9 +166,11 @@ def run(hparams):
                     break
 
         # all_gather is used to aggregated the value across processes
-        test_loss = fabric.all_gather(test_loss).sum() / len(test_loader.dataset)
+        test_loss = fabric.all_gather(test_loss).sum() / len(val_loader.dataset)
 
-        print(f"\nTest set: Average loss: {test_loss:.4f}, Accuracy: ({100 * test_acc.compute():.0f}%)\n")
+        print(
+            f"\nTest set: Average loss: {test_loss:.4f}, Accuracy: ({100 * test_acc.compute():.0f}%)\n"
+        )
         test_acc.reset()
 
         if hparams.dry_run:
@@ -166,13 +188,42 @@ if __name__ == "__main__":
     # fabric run image_classifier.py accelerator=cuda --epochs=3
     parser = argparse.ArgumentParser(description="Fabric MNIST Example")
     parser.add_argument(
-        "--batch-size", type=int, default=64, metavar="N", help="input batch size for training (default: 64)"
+        "--batch-size",
+        type=int,
+        default=64,
+        metavar="N",
+        help="input batch size for training (default: 64)",
     )
-    parser.add_argument("--epochs", type=int, default=14, metavar="N", help="number of epochs to train (default: 14)")
-    parser.add_argument("--lr", type=float, default=1.0, metavar="LR", help="learning rate (default: 1.0)")
-    parser.add_argument("--gamma", type=float, default=0.7, metavar="M", help="Learning rate step gamma (default: 0.7)")
-    parser.add_argument("--dry-run", action="store_true", default=False, help="quickly check a single pass")
-    parser.add_argument("--seed", type=int, default=1, metavar="S", help="random seed (default: 1)")
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=14,
+        metavar="N",
+        help="number of epochs to train (default: 14)",
+    )
+    parser.add_argument(
+        "--lr",
+        type=float,
+        default=1.0,
+        metavar="LR",
+        help="learning rate (default: 1.0)",
+    )
+    parser.add_argument(
+        "--gamma",
+        type=float,
+        default=0.7,
+        metavar="M",
+        help="Learning rate step gamma (default: 0.7)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="quickly check a single pass",
+    )
+    parser.add_argument(
+        "--seed", type=int, default=1, metavar="S", help="random seed (default: 1)"
+    )
     parser.add_argument(
         "--log-interval",
         type=int,
@@ -180,7 +231,12 @@ if __name__ == "__main__":
         metavar="N",
         help="how many batches to wait before logging training status",
     )
-    parser.add_argument("--save-model", action="store_true", default=False, help="For Saving the current Model")
+    parser.add_argument(
+        "--save-model",
+        action="store_true",
+        default=False,
+        help="For Saving the current Model",
+    )
     hparams = parser.parse_args()
 
     run(hparams)
