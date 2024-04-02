@@ -1,7 +1,6 @@
-[submodule "pytorch-lightning-template"]
-path = refer/pytorch-lightning-template
-url = https://github.com/DavidZhang73/pytorch-lightning-template.git
-
-[submodule "lightning-hydra-template"]
-path = refer/lightning-hydra-template
-url=https://github.com/ashleve/lightning-hydra-template.git
+[submodule "refer/pytorch-lightning-template"]
+	path = refer/pytorch-lightning-template
+	url = https://github.com/DavidZhang73/pytorch-lightning-template.git
+[submodule "refer/lightning-hydra-template"]
+	path = refer/lightning-hydra-template
+	url = https://github.com/ashleve/lightning-hydra-template.git
