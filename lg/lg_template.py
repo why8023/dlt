@@ -41,6 +41,15 @@ class ECGPPG(LightningModule):
     ):
         super().__init__()
         self.save_hyperparameters()
+
+        self.train_loss = torchmetrics.MeanMetric()
+        self.val_loss = torchmetrics.MeanMetric()
+        self.test_loss = torchmetrics.MeanMetric()
+
+        self.train_r2 = torchmetrics.R2Score(output_dim)
+        self.val_r2 = torchmetrics.R2Score(output_dim)
+        self.test_r2 = torchmetrics.R2Score(output_dim)
+
         self.conv = nn.Sequential(
             nn.Conv1d(1, 16, kernel_size=16, stride=2),
             nn.ReLU(),
@@ -101,7 +110,7 @@ class ECGPPG(LightningModule):
         return self(batch)
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=0.001)
+        return torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
 
     def _common_step(self, batch, batch_idx, stage: str):
         x, y = batch
@@ -156,19 +165,13 @@ def cli_main():
         DataModule,
         seed_everything_default=1234,
         run=True,  # used to de-activate automatic fitting.
-        trainer_defaults={
-            "callbacks": [
-                LearningRateMonitor(),
-            ],
-            "max_epochs": 10,
-        },
-        # save_config_kwargs={"overwrite": True},
+        save_config_kwargs={"overwrite": True},
         parser_kwargs={"parser_mode": "omegaconf"},
     )
-    cli.trainer.fit(
-        cli.model,
-        datamodule=cli.datamodule,
-    )
+    # cli.trainer.fit(
+    #     cli.model,
+    #     datamodule=cli.datamodule,
+    # )
     # cli.trainer.test(ckpt_path="best", datamodule=cli.datamodule)
     # predictions = cli.trainer.predict(ckpt_path="best", datamodule=cli.datamodule)
     # print(predictions[0])
