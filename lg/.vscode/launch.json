@@ -10,7 +10,9 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}"
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}",
+            "args": ["fit", "-c", "config.yaml"]
         }
     ]
 }

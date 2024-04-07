@@ -4,3 +4,6 @@
 [submodule "refer/lightning-hydra-template"]
 	path = refer/lightning-hydra-template
 	url = https://github.com/ashleve/lightning-hydra-template.git
+[submodule "refer/yet-another-lightning-hydra-template"]
+	path = refer/yet-another-lightning-hydra-template
+	url = https://github.com/gorodnitskiy/yet-another-lightning-hydra-template.git

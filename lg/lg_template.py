@@ -1,38 +1,20 @@
-"""MNIST autoencoder example.
-
-To run: python autoencoder.py --trainer.max_epochs=50
-
-"""
-
 from os import path
+from pathlib import Path
 from typing import Optional, Tuple
 
 import torch
 import torch.nn.functional as F
+import torchmetrics
 from lightning.pytorch import (
     LightningDataModule,
     LightningModule,
-    Trainer,
-    callbacks,
     cli_lightning_logo,
 )
-from lightning.pytorch.cli import LightningCLI, LightningArgumentParser
-from lightning.pytorch.demos.mnist_datamodule import MNIST
-from lightning.pytorch.utilities import rank_zero_only
-from lightning.pytorch.utilities.imports import _TORCHVISION_AVAILABLE
+from lightning.pytorch.cli import LightningArgumentParser, LightningCLI
 from torch import nn
 from torch.utils.data import DataLoader, random_split
-from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint, LearningRateFinder, LearningRateMonitor, RichModelSummary, RichProgressBar, ThroughputMonitor
-from lightning.pytorch.loggers import TensorBoardLogger, CSVLogger, WandbLogger
-
-if _TORCHVISION_AVAILABLE:
-    import torchvision
-    from torchvision import transforms
-    from torchvision.utils import save_image
-
 
 from dataset import ECG_PPG_Dataset
-import torchmetrics
 
 
 class ECGPPG(LightningModule):
@@ -175,6 +157,10 @@ def cli_main():
     # cli.trainer.test(ckpt_path="best", datamodule=cli.datamodule)
     # predictions = cli.trainer.predict(ckpt_path="best", datamodule=cli.datamodule)
     # print(predictions[0])
+
+    # test
+    test_path = [Path("\\192.168.2.8\xjk\Algorithm\PPG_AF\clinic_Phase2_analysis\WECGMatchWPPGAlign_Sample_Invalid"), ]
+    preds = cli.trainer.predict(ckpt_path="best", datamodule=cli.datamodule)
 
 
 if __name__ == "__main__":

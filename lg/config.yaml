@@ -70,10 +70,12 @@ trainer:
         num_training_steps: 500
         mode: exponential
 
-    - class_path: RichProgressBar
-      init_args:
-        refresh_rate: 1
-        leave: true
+    # - class_path: RichProgressBar
+    #   init_args:
+    #     refresh_rate: 1
+    #     leave: true
+
+    - class_path: light_progress_bar.LightProgressBar
     
     - class_path: RichModelSummary
       init_args:
