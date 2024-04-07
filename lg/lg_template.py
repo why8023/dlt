@@ -1,5 +1,4 @@
 from os import path
-from pathlib import Path
 from typing import Optional, Tuple
 
 import torch
@@ -15,6 +14,7 @@ from torch import nn
 from torch.utils.data import DataLoader, random_split
 
 from dataset import ECG_PPG_Dataset
+
 
 
 class ECGPPG(LightningModule):
@@ -157,10 +157,6 @@ def cli_main():
     # cli.trainer.test(ckpt_path="best", datamodule=cli.datamodule)
     # predictions = cli.trainer.predict(ckpt_path="best", datamodule=cli.datamodule)
     # print(predictions[0])
-
-    # test
-    test_path = [Path("\\192.168.2.8\xjk\Algorithm\PPG_AF\clinic_Phase2_analysis\WECGMatchWPPGAlign_Sample_Invalid"), ]
-    preds = cli.trainer.predict(ckpt_path="best", datamodule=cli.datamodule)
 
 
 if __name__ == "__main__":

@@ -9,10 +9,21 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Python Debugger: args",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
             "console": "integratedTerminal",
             "justMyCode": false,
             "cwd": "${workspaceFolder}",
-            "args": ["fit", "-c", "config.yaml"]
+            "args": [
+                "fit",
+                "-c",
+                "config.yaml"
+            ]
         }
     ]
 }
